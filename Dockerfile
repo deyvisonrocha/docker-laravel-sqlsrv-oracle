@@ -1,10 +1,10 @@
 FROM ubuntu:16.04
 
 MAINTAINER Deyvison Rocha <deyvison@gmail.com>
-
 # Let the container know that there is no tty
-ENV DEBIAN_FRONTEN noninteractive \
-    ORACLE_HOME /usr/lib/oracle/12.2/client64
+ENV DEBIAN_FRONTEN noninteractive
+ENV LD_LIBRARY_PATH /opt/oracle/instantclient_12_2
+ENV ORACLE_HOME /opt/oracle/instantclient_12_2
 
 RUN echo "--> Configuring" && \
     dpkg-divert --local --rename --add /sbin/initctl && \
@@ -18,7 +18,16 @@ RUN echo "--> Installing PHP" && \
 	LC_ALL=en_US.UTF-8 add-apt-repository ppa:ondrej/php && \
 	apt-get update && apt-get upgrade -y && \
 	apt-get install -y python-setuptools alien curl git vim sudo unzip openssh-server openssl supervisor nginx memcached ssmtp cron build-essential libaio1 && \
-	apt-get install -y php7.1-fpm php7.1-mysql php7.1-curl php7.1-dev php7.1-gd php7.1-intl php7.1-mcrypt php7.1-sqlite php7.1-tidy php7.1-xmlrpc php-pear php7.1-ldap freetds-common php7.1-sqlite3 php7.1-json php7.1-xml php7.1-mbstring php7.1-soap php7.1-zip php7.1-cli php7.1-sybase php7.1-odbc
+	apt-get install -y php7.1-fpm php7.1-mysql php7.1-curl php7.1-dev php7.1-gd php7.1-intl php7.1-mcrypt php7.1-sqlite php7.1-tidy php7.1-xmlrpc php-pear php7.1-ldap freetds-common php7.1-sqlite3 php7.1-json php7.1-xml php7.1-mbstring php7.1-soap php7.1-zip php7.1-cli php7.1-sybase php7.1-odbc php7.1-readline
+
+RUN echo "--> Installing Composer" && \
+    curl -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin --filename=composer
+
+RUN echo "--> Installing Yarn and NodeJS" && \
+    curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - && \
+    echo "deb https://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list && \
+    curl -sL https://deb.nodesource.com/setup_9.x | bash - && \
+    apt-get install --no-install-recommends -y nodejs yarn
 
 RUN echo "--> Installing MSSQL Server pre requisites" && \
     curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - && \
@@ -38,41 +47,29 @@ RUN echo "--> Installing MSSQL Server pre requisites" && \
     ln -s /etc/php/7.1/mods-available/pdo_sqlsrv.ini /etc/php/7.1/cli/conf.d/20-pdo_sqlsrv.ini
 
 RUN echo "--> Installing Oracle InstantClient" && \
-    # Install Oracle Instance Client
     mkdir -p /opt/oracle && \
-    wget https://github.com/bumpx/oracle-instantclient/raw/master/oracle-instantclient12.2-basic-12.2.0.1.0-1.x86_64.rpm && \
-    wget https://github.com/bumpx/oracle-instantclient/raw/master/oracle-instantclient12.2-devel-12.2.0.1.0-1.x86_64.rpm && \
-    wget https://github.com/bumpx/oracle-instantclient/raw/master/oracle-instantclient12.2-sqlplus-12.2.0.1.0-1.x86_64.rpm && \
-    wget https://github.com/bumpx/oracle-instantclient/blob/master/instantclient-sdk-linux-12.2.0.1.0.zip && \
-    # alien
-    alien -i oracle-instantclient12.2-basic-12.2.0.1.0-1.x86_64.rpm && \
-    alien -i oracle-instantclient12.2-devel-12.2.0.1.0-1.x86_64.rpm && \
-    alien -i oracle-instantclient12.2-sqlplus-12.2.0.1.0-1.x86_64.rpm && \
-    # ln -s /opt/oracle/instantclient_12_2/libclntsh.so.12.1 /opt/oracle/instantclient_12_2/libclntsh.so &&
-    # ln -s /opt/oracle/instantclient_12_2/libocci.so.12.1 /opt/oracle/instantclient_12_2/libocci.so &&
-    mkdir -p /usr/lib/oracle/12.2/client64/network/admin && \
-    wget https://gist.githubusercontent.com/deyvisonrocha/6fa2562585d1fe4715ff80e06e0e2989/raw/24a196c2b7473f056f91049d94c4ad3c578bb2bd/tsnnames.ora -O /usr/lib/oracle/12.2/client64/network/admin/tsnnames.ora
+    wget https://github.com/bumpx/oracle-instantclient/raw/master/instantclient-basic-linux.x64-12.2.0.1.0.zip -P /opt/oracle/ && \
+    wget https://github.com/bumpx/oracle-instantclient/raw/master/instantclient-sdk-linux.x64-12.2.0.1.0.zip -P /opt/oracle/ && \
+    unzip /opt/oracle/instantclient-basic-linux.x64-12.2.0.1.0.zip -d /opt/oracle && \
+    unzip /opt/oracle/instantclient-sdk-linux.x64-12.2.0.1.0.zip -d /opt/oracle && \
+    ln -s $ORACLE_HOME/libclntsh.so.12.1 $ORACLE_HOME/libclntsh.so && \
+    ln -s $ORACLE_HOME/libclntshcore.so.12.1 $ORACLE_HOME/libclntshcore.so && \
+    ln -s $ORACLE_HOME/libocci.so.12.1 $ORACLE_HOME/libocci.so && \
+    echo $ORACLE_HOME > /etc/ld.so.conf.d/oracle.conf && ldconfig && \
+    mkdir -p $ORACLE_HOME/network/admin && \
+    wget https://gist.githubusercontent.com/deyvisonrocha/6fa2562585d1fe4715ff80e06e0e2989/raw/24a196c2b7473f056f91049d94c4ad3c578bb2bd/tsnnames.ora -O $ORACLE_HOME/network/admin/tsnnames.ora
 
-RUN echo "-- Installing OCI8" && \
-    pecl install oci8 && \
+RUN echo "--> Installing OCI8" && \
+    echo "instantclient,$ORACLE_HOME" | pecl install oci8 && \
     echo -e "; priority=20\nextension=oci8.so" > /etc/php/7.1/mods-available/oci8.ini && \
     ln -s /etc/php/7.1/mods-available/oci8.ini /etc/php/7.1/fpm/conf.d/20-oci8.ini && \
     ln -s /etc/php/7.1/mods-available/oci8.ini /etc/php/7.1/cli/conf.d/20-oci8.ini
-
-# Cleanup
-RUN apt-get remove --purge -y software-properties-common python-software-properties && \
-	apt-get autoremove -y && \
-	apt-get clean && \
-	apt-get autoclean && \
-	# install composer
-	curl -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin --filename=composer
 
 # Nginx configuration
 RUN sed -i -e"s/worker_processes  1/worker_processes 5/" /etc/nginx/nginx.conf && \
 	sed -i -e"s/keepalive_timeout\s*65/keepalive_timeout 2/" /etc/nginx/nginx.conf && \
 	sed -i -e"s/keepalive_timeout 2/keepalive_timeout 2;\n\tclient_max_body_size 128m;\n\tproxy_buffer_size 256k;\n\tproxy_buffers 4 512k;\n\tproxy_busy_buffers_size 512k/" /etc/nginx/nginx.conf && \
 	echo "daemon off;" >> /etc/nginx/nginx.conf && \
-
 	# PHP-FPM configuration
 	sed -i -e "s/;cgi.fix_pathinfo=1/cgi.fix_pathinfo=0/g" /etc/php/7.1/fpm/php.ini && \
 	sed -i -e "s/upload_max_filesize\s*=\s*2M/upload_max_filesize = 100M/g" /etc/php/7.1/fpm/php.ini && \
@@ -95,6 +92,11 @@ RUN sed -i -e"s/worker_processes  1/worker_processes 5/" /etc/nginx/nginx.conf &
 	rm -Rf /etc/nginx/sites-available/default && \
 	# create workdir directory
 	mkdir -p /var/www/app
+
+# Cleanup
+RUN apt-get autoremove -y && \
+	apt-get clean && \
+	apt-get autoclean
 
 COPY ./config/nginx/nginx.conf /etc/nginx/sites-available/default.conf
 # Supervisor Config
