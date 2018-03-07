@@ -46,6 +46,8 @@ RUN echo "--> Installing MSSQL Server pre requisites" && \
     ln -s /etc/php/7.1/mods-available/pdo_sqlsrv.ini /etc/php/7.1/fpm/conf.d/20-pdo_sqlsrv.ini && \
     ln -s /etc/php/7.1/mods-available/pdo_sqlsrv.ini /etc/php/7.1/cli/conf.d/20-pdo_sqlsrv.ini
 
+COPY ./freetds/freetds.conf /etc/freetds/freetds.conf
+
 RUN echo "--> Installing Oracle InstantClient" && \
     mkdir -p /opt/oracle && \
     wget https://github.com/bumpx/oracle-instantclient/raw/master/instantclient-basic-linux.x64-12.2.0.1.0.zip -P /opt/oracle/ && \
