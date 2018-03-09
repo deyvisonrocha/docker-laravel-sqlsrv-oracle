@@ -1,0 +1,77 @@
+version: '2'
+
+volumes:
+
+
+services:
+  workspace:
+    image: busybox:latest
+    volumes:
+      - ./:/var/www
+      - ./services/nginx/logs:/var/log/nginx
+      - ./services/nginx/sites:/etc/nginx/conf.d
+  php-fpm:
+    build:
+      context: ./services/php-fpm
+      args:
+        - "XDEBUG_ON=${XDEBUG_ON}"
+        - "XDEBUG_REMOTE_HOST=${XDEBUG_REMOTE_HOST}"
+    ports:
+      - 9000
+    volumes_from:
+      - workspace
+    restart: always
+  composer:
+    build:
+      context: ./services/composer
+    volumes:
+      - ./:/app
+  nginx:
+    build:
+      context: ./services/nginx
+    volumes_from:
+      - workspace
+    ports:
+      - 8080:80
+    depends_on:
+      - php-fpm
+    restart: always
+  node:
+    build:
+      context: ./services/node
+    volumes_from:
+      - workspace
+
+volumes:
+  php-fpm:
+    driver: "local"
+  nginx:
+    driver: "local"
+  mariadb:
+    driver: "local"
+  # web:
+  #   build:
+  #     context: ./config/
+  #     dockerfile: web.docker
+  #   volumes:
+  #     - ./:/var/www/app
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #     - "9000:9000"
+  #   links:
+  #     - app
+  # app:
+  #   build:
+  #     context: ./config
+  #     dockerfile: app.docker
+  #   volumes:
+  #     - ./:/var/www/app
+  #   # links:
+  #     # - mysql
+  #     # - redis
+  #     # - beanstalk
+  #     # - cache
+  #   environment:
+  #     - "REDIS_PORT=6379"
+  #     - "REDIS_HOST=redis"
